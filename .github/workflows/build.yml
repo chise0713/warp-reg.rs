@@ -1,0 +1,208 @@
+# https://github.com/james58899/hath-rust/blob/7c36070ef39e5ef21ff07e1d4e8c3176ad72a146/.github/workflows/build.yml
+name: Build
+
+on:
+  push:
+    branches: "master"
+  pull_request:
+    branches: "master"
+  workflow_call:
+    inputs:
+      skip-linux:
+        required: false
+        type: boolean
+        default: false
+      skip-linux-musl:
+        required: false
+        type: boolean
+        default: false
+      skip-windows:
+        required: false
+        type: boolean
+        default: false
+      skip-macos:
+        required: false
+        type: boolean
+        default: false
+      skip-android:
+        required: false
+        type: boolean
+        default: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-20.04
+    if: inputs.skip-linux != true
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "armv7-unknown-linux-gnueabihf"]
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install build tools
+      run: |
+        sudo apt-get update && sudo apt-get install -y crossbuild-essential-arm64 crossbuild-essential-armhf
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+    - name: Install toolchain
+      run: |
+        rustup update
+        rustup target add ${{ matrix.target }}
+    - name: Build
+      env:
+        CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: "aarch64-linux-gnu-gcc"
+        CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: "arm-linux-gnueabihf-gcc"
+      run: cargo build --verbose --release --target=${{ matrix.target }}
+    - uses: actions/upload-artifact@v4
+      with:
+        name: warp-reg-${{ matrix.target }}
+        path: target/${{ matrix.target }}/release/warp-reg
+  build-linux-musl:
+    runs-on: ubuntu-latest
+    if: inputs.skip-linux-musl != true
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ["x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl", "armv7-unknown-linux-musleabihf"]
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install build tools
+      run: |
+        wget https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh 18
+        sudo apt-get install -y crossbuild-essential-arm64 crossbuild-essential-armhf
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+    - name: Install toolchain
+      run: |
+        rustup update
+        rustup target add ${{ matrix.target }}
+    - name: Build
+      env:
+        CC: clang-18
+        CXX: clang-18
+        CFLAGS: "-fuse-ld=lld-18"
+        CXXFLAGS: "-fuse-ld=lld-18"
+        CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_RUSTFLAGS: "-Clinker=clang-18 -Clink-arg=-fuse-ld=lld-18 -Clink-arg=--target=x86_64-unknown-linux-musl"
+        CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS: "-Clinker=clang-18 -Clink-arg=-fuse-ld=lld-18 -Clink-arg=--target=aarch64-unknown-linux-musl"
+        CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_RUSTFLAGS: "-Clinker=clang-18 -Clink-arg=-fuse-ld=lld-18 -Clink-arg=--target=armv7-unknown-linux-musleabihf"
+      run: cargo build --verbose --release --target=${{ matrix.target }}
+    - uses: actions/upload-artifact@v4
+      with:
+        name: warp-reg-${{ matrix.target }}
+        path: target/${{ matrix.target }}/release/warp-reg
+  build-windows:
+    runs-on: windows-latest
+    if: inputs.skip-windows != true
+    strategy:
+      matrix:
+        target: ["x86_64-pc-windows-msvc", "i686-pc-windows-msvc"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install toolchain
+        run: |
+          rustup update
+          rustup target add ${{ matrix.target }}
+      - name: Build
+        run: cargo build --verbose --release --target ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: warp-reg-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/warp-reg.exe
+  build-macos:
+    runs-on: macos-14
+    if: inputs.skip-macos != true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install toolchain
+        run: |
+          rustup update
+          rustup target add x86_64-apple-darwin
+      - name: Build x86
+        run: cargo build --verbose --release --target x86_64-apple-darwin
+      - name: Build ARM64
+        run: cargo build --verbose --release --target aarch64-apple-darwin
+      - name: Universal binary
+        run: lipo -create target/x86_64-apple-darwin/release/warp-reg target/aarch64-apple-darwin/release/warp-reg -output target/release/warp-reg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: warp-reg-universal-apple-darwin
+          path: target/release/warp-reg
+  build-android:
+    runs-on: ubuntu-latest
+    if: inputs.skip-android != true
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - aarch64-linux-android
+          - armv7-linux-androideabi
+          # - i686-linux-android
+          - x86_64-linux-android
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+    - name: Install toolchain
+      run: |
+        rustup update
+        rustup target add ${{ matrix.target }}
+    - name: Build
+      env:
+        CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: "aarch64-linux-android21-clang"
+        CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER: "armv7a-linux-androideabi21-clang"
+        # CARGO_TARGET_I686_LINUX_ANDROID_LINKER: "i686-linux-android21-clang"
+        CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER: "x86_64-linux-android21-clang"
+        CC_armv7-linux-androideabi: "armv7a-linux-androideabi21-clang"
+        # CC_i686-linux-android: "i686-linux-android21-clang"
+      run: |
+        find "${ANDROID_NDK_ROOT}" -name "libunwind.a" -execdir touch libgcc.a \;
+        export PATH=$PATH:${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin
+        cargo build --verbose --release --target=${{ matrix.target }}
+    - uses: actions/upload-artifact@v4
+      with:
+        name: warp-reg-${{ matrix.target }}
+        path: target/${{ matrix.target }}/release/warp-reg

@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags: [ "**" ]
+
+jobs:
+  Build:
+    uses: ./.github/workflows/build.yml
+  Release:
+    needs: Build
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Rename artifact
+        run: |
+          mv artifacts/warp-reg-x86_64-unknown-linux-gnu/warp-reg warp-reg-x86_64-unknown-linux-gnu
+          mv artifacts/warp-reg-x86_64-unknown-linux-musl/warp-reg warp-reg-x86_64-unknown-linux-musl
+          mv artifacts/warp-reg-aarch64-unknown-linux-gnu/warp-reg warp-reg-aarch64-unknown-linux-gnu
+          mv artifacts/warp-reg-aarch64-unknown-linux-musl/warp-reg warp-reg-aarch64-unknown-linux-musl
+          mv artifacts/warp-reg-armv7-unknown-linux-gnueabihf/warp-reg warp-reg-armv7-unknown-linux-gnueabihf
+          mv artifacts/warp-reg-armv7-unknown-linux-musleabihf/warp-reg warp-reg-armv7-unknown-linux-musleabihf
+          mv artifacts/warp-reg-x86_64-pc-windows-msvc/warp-reg.exe warp-reg-x86_64-pc-windows-msvc.exe
+          mv artifacts/warp-reg-i686-pc-windows-msvc/warp-reg.exe warp-reg-i686-pc-windows-msvc.exe
+          mv artifacts/warp-reg-universal-apple-darwin/warp-reg warp-reg-universal-apple-darwin
+          mv artifacts/warp-reg-aarch64-linux-android/warp-reg warp-reg-aarch64-linux-android
+          mv artifacts/warp-reg-armv7-linux-androideabi/warp-reg warp-reg-armv7-linux-androideabi
+          mv artifacts/warp-reg-i686-linux-android/warp-reg warp-reg-i686-linux-android || true
+          mv artifacts/warp-reg-x86_64-linux-android/warp-reg warp-reg-x86_64-linux-android
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: |
+            warp-reg-x86_64-unknown-linux-gnu
+            warp-reg-x86_64-unknown-linux-musl
+            warp-reg-aarch64-unknown-linux-gnu
+            warp-reg-aarch64-unknown-linux-musl
+            warp-reg-armv7-unknown-linux-gnueabihf
+            warp-reg-armv7-unknown-linux-musleabihf
+            warp-reg-x86_64-pc-windows-msvc.exe
+            warp-reg-i686-pc-windows-msvc.exe
+            warp-reg-universal-apple-darwin
+            warp-reg-aarch64-linux-android
+            warp-reg-armv7-linux-androideabi
+            warp-reg-i686-linux-android
+            warp-reg-x86_64-linux-android
